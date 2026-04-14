@@ -1,112 +1,127 @@
 import streamlit as st
 import pandas as pd
 
-st.set_page_config(page_title="Cross Sell Opportunity Finder", layout="wide")
+# ---------------- PAGE CONFIG ----------------
+st.set_page_config(
+    page_title="Cross Sell Opportunity Finder",
+    layout="wide"
+)
 
-st.title("📊 Cross-Sell Opportunity Analyzer")
-st.write("Upload your sales data and discover potential cross-selling opportunities based on industry purchasing patterns.")
+st.title("📊 Cross Sell Opportunity Analyzer")
+st.markdown("Analyze customer purchasing gaps and identify potential cross-selling opportunities.")
 
-# Upload file
-uploaded_file = st.file_uploader("Upload Excel File", type=["xlsx", "csv"])
+# ---------------- FILE UPLOAD ----------------
+uploaded_file = st.file_uploader(
+    "Upload Sales Data File",
+    type=["xlsx", "csv"]
+)
 
-if uploaded_file:
+if uploaded_file is not None:
 
-    # Read file
-    if uploaded_file.name.endswith('.csv'):
-        df = pd.read_csv(uploaded_file)
-    else:
-        df = pd.read_excel(uploaded_file)
+    try:
+        # READ FILE
+        if uploaded_file.name.endswith(".csv"):
+            df = pd.read_csv(uploaded_file)
 
-    # Required columns
-    required_cols = [
-        'Business Partner',
-        'Industry of customer',
-        'Product Category',
-        'Product Search Key'
-    ]
+        elif uploaded_file.name.endswith(".xlsx"):
+            df = pd.read_excel(
+                uploaded_file,
+                engine="openpyxl"
+            )
 
-    if all(col in df.columns for col in required_cols):
+        # REQUIRED COLUMNS
+        required_cols = [
+            'Business Partner',
+            'Industry of customer',
+            'Product Category',
+            'Product Search Key'
+        ]
 
+        # CHECK COLUMNS
+        missing_cols = [col for col in required_cols if col not in df.columns]
+
+        if missing_cols:
+            st.error(f"Missing Columns: {missing_cols}")
+            st.stop()
+
+        # CLEAN DATA
         df = df[required_cols].drop_duplicates()
 
-        st.success("File uploaded successfully!")
+        st.success("✅ File Uploaded Successfully")
 
-        # Sidebar Filters
+        # ---------------- SIDEBAR FILTERS ----------------
         st.sidebar.header("Filters")
 
         selected_industry = st.sidebar.selectbox(
             "Select Industry",
-            sorted(df['Industry of customer'].unique())
+            sorted(df['Industry of customer'].dropna().unique())
         )
 
-        industry_df = df[df['Industry of customer'] == selected_industry]
+        industry_df = df[
+            df['Industry of customer'] == selected_industry
+        ]
 
         selected_partner = st.sidebar.selectbox(
             "Select Business Partner",
-            sorted(industry_df['Business Partner'].unique())
+            sorted(industry_df['Business Partner'].dropna().unique())
         )
 
         threshold = st.sidebar.slider(
-            "Recommendation Threshold (%)",
-            min_value=10,
-            max_value=100,
-            value=40
+            "Recommendation Threshold %",
+            10,
+            100,
+            40
         ) / 100
 
-        # Calculate Industry Patterns
+        # ---------------- ANALYSIS ----------------
         total_customers = industry_df['Business Partner'].nunique()
 
-        category_counts = industry_df.groupby('Product Category')['Business Partner'].nunique()
+        category_counts = industry_df.groupby(
+            'Product Category'
+        )['Business Partner'].nunique()
 
         common_categories = category_counts[
-            category_counts / total_customers >= threshold
+            (category_counts / total_customers) >= threshold
         ].index.tolist()
 
         partner_categories = industry_df[
             industry_df['Business Partner'] == selected_partner
         ]['Product Category'].unique()
 
-        missing_categories = set(common_categories) - set(partner_categories)
+        missing_categories = list(
+            set(common_categories) - set(partner_categories)
+        )
 
-        # Display Results
-        st.subheader(f"🔍 Analysis for {selected_partner}")
+        # ---------------- RESULTS ----------------
+        st.subheader(f"Results for: {selected_partner}")
 
         col1, col2 = st.columns(2)
 
         with col1:
-            st.write("### Purchased Categories")
+            st.markdown("### Purchased Categories")
             st.write(list(partner_categories))
 
         with col2:
-            st.write("### Recommended Cross-Sell Categories")
+            st.markdown("### Recommended Cross Sell Categories")
+
             if missing_categories:
-                st.success(list(missing_categories))
+                st.success(missing_categories)
             else:
-                st.info("No cross-sell opportunities found.")
+                st.info("No recommendations found.")
 
-        # Show Industry Benchmark
-        st.subheader("📈 Industry Purchase Benchmark")
-
-        benchmark_df = pd.DataFrame({
-            'Product Category': category_counts.index,
-            'Customers Buying': category_counts.values,
-            'Penetration %': round((category_counts.values / total_customers) * 100, 2)
-        })
-
-        st.dataframe(benchmark_df)
-
-        # Download Button
+        # ---------------- DOWNLOAD BUTTON ----------------
         output_df = pd.DataFrame({
-            'Business Partner': [selected_partner],
-            'Industry': [selected_industry],
-            'Recommended Categories': [", ".join(missing_categories)]
+            "Business Partner": [selected_partner],
+            "Industry": [selected_industry],
+            "Recommended Categories": [", ".join(missing_categories)]
         })
 
         st.download_button(
-            "📥 Download Recommendations",
-            output_df.to_csv(index=False),
-            file_name="cross_sell_recommendations.csv"
+            label="📥 Download Recommendation CSV",
+            data=output_df.to_csv(index=False),
+            file_name="cross_sell_recommendations.csv",
+            mime="text/csv"
         )
 
-    else:
-        st.error("Uploaded file missing required columns.")
+    except Exception as e:
+        st.error(f"Error Reading File: {e}")

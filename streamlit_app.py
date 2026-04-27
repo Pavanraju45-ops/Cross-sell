@@ -1,127 +1,100 @@
 import streamlit as st
 import pandas as pd
 
-# ---------------- PAGE CONFIG ----------------
-st.set_page_config(
-    page_title="Cross Sell Opportunity Finder",
-    layout="wide"
-)
+st.set_page_config(page_title="Branch Cross-Sell Analyzer", layout="wide")
 
-st.title("📊 Cross Sell Opportunity Analyzer")
-st.markdown("Analyze customer purchasing gaps and identify potential cross-selling opportunities.")
+st.title("🤝 Branch Cross-Sell Opportunity Analyzer")
 
-# ---------------- FILE UPLOAD ----------------
-uploaded_file = st.file_uploader(
-    "Upload Sales Data File",
-    type=["xlsx", "csv"]
-)
+uploaded_file = st.file_uploader("Upload Sales Data", type=["xlsx", "csv"])
 
-if uploaded_file is not None:
+if uploaded_file:
 
-    try:
-        # READ FILE
-        if uploaded_file.name.endswith(".csv"):
-            df = pd.read_csv(uploaded_file)
+    # Read file
+    if uploaded_file.name.endswith(".csv"):
+        df = pd.read_csv(uploaded_file)
+    else:
+        df = pd.read_excel(uploaded_file, engine="openpyxl")
 
-        elif uploaded_file.name.endswith(".xlsx"):
-            df = pd.read_excel(
-                uploaded_file,
-                engine="openpyxl"
-            )
+    required_cols = [
+        'Organization',
+        'Industry of customer',
+        'Product Category',
+        'Product Brand'
+    ]
 
-        # REQUIRED COLUMNS
-        required_cols = [
-            'Business Partner',
-            'Industry of customer',
-            'Product Category',
-            'Product Search Key'
-        ]
+    if not all(col in df.columns for col in required_cols):
+        st.error("Missing required columns!")
+        st.stop()
 
-        # CHECK COLUMNS
-        missing_cols = [col for col in required_cols if col not in df.columns]
+    df = df[required_cols].drop_duplicates()
 
-        if missing_cols:
-            st.error(f"Missing Columns: {missing_cols}")
-            st.stop()
+    # Sidebar filters
+    st.sidebar.header("Select Branches")
 
-        # CLEAN DATA
-        df = df[required_cols].drop_duplicates()
+    branch_a = st.sidebar.selectbox(
+        "Select Your Branch",
+        sorted(df['Organization'].unique())
+    )
 
-        st.success("✅ File Uploaded Successfully")
+    branch_b = st.sidebar.selectbox(
+        "Select Other Branch",
+        sorted(df['Organization'].unique())
+    )
 
-        # ---------------- SIDEBAR FILTERS ----------------
-        st.sidebar.header("Filters")
+    # Filter data
+    df_a = df[df['Organization'] == branch_a]
+    df_b = df[df['Organization'] == branch_b]
 
-        selected_industry = st.sidebar.selectbox(
-            "Select Industry",
-            sorted(df['Industry of customer'].dropna().unique())
-        )
+    # Helper function
+    def extract_sets(data):
+        return {
+            "Industry": set(data['Industry of customer']),
+            "Category": set(data['Product Category']),
+            "Brand": set(data['Product Brand'])
+        }
 
-        industry_df = df[
-            df['Industry of customer'] == selected_industry
-        ]
+    sets_a = extract_sets(df_a)
+    sets_b = extract_sets(df_b)
 
-        selected_partner = st.sidebar.selectbox(
-            "Select Business Partner",
-            sorted(industry_df['Business Partner'].dropna().unique())
-        )
+    # Layout
+    col1, col2 = st.columns(2)
 
-        threshold = st.sidebar.slider(
-            "Recommendation Threshold %",
-            10,
-            100,
-            40
-        ) / 100
+    with col1:
+        st.subheader(f"📍 {branch_a} Portfolio")
+        st.write("**Industries:**", list(sets_a["Industry"]))
+        st.write("**Categories:**", list(sets_a["Category"]))
+        st.write("**Brands:**", list(sets_a["Brand"]))
 
-        # ---------------- ANALYSIS ----------------
-        total_customers = industry_df['Business Partner'].nunique()
+    with col2:
+        st.subheader(f"📍 {branch_b} Portfolio")
+        st.write("**Industries:**", list(sets_b["Industry"]))
+        st.write("**Categories:**", list(sets_b["Category"]))
+        st.write("**Brands:**", list(sets_b["Brand"]))
 
-        category_counts = industry_df.groupby(
-            'Product Category'
-        )['Business Partner'].nunique()
+    st.divider()
 
-        common_categories = category_counts[
-            (category_counts / total_customers) >= threshold
-        ].index.tolist()
+    # Overlap
+    st.subheader("🔗 Common Areas (Overlap)")
 
-        partner_categories = industry_df[
-            industry_df['Business Partner'] == selected_partner
-        ]['Product Category'].unique()
+    st.write("**Industries:**", list(sets_a["Industry"] & sets_b["Industry"]))
+    st.write("**Categories:**", list(sets_a["Category"] & sets_b["Category"]))
+    st.write("**Brands:**", list(sets_a["Brand"] & sets_b["Brand"]))
 
-        missing_categories = list(
-            set(common_categories) - set(partner_categories)
-        )
+    st.divider()
 
-        # ---------------- RESULTS ----------------
-        st.subheader(f"Results for: {selected_partner}")
+    # Opportunities
+    st.subheader("🚀 Cross-Sell Opportunities")
 
-        col1, col2 = st.columns(2)
+    col3, col4 = st.columns(2)
 
-        with col1:
-            st.markdown("### Purchased Categories")
-            st.write(list(partner_categories))
+    with col3:
+        st.markdown(f"### What {branch_a} Can Learn from {branch_b}")
+        st.write("**New Industries:**", list(sets_b["Industry"] - sets_a["Industry"]))
+        st.write("**New Categories:**", list(sets_b["Category"] - sets_a["Category"]))
+        st.write("**New Brands:**", list(sets_b["Brand"] - sets_a["Brand"]))
 
-        with col2:
-            st.markdown("### Recommended Cross Sell Categories")
-
-            if missing_categories:
-                st.success(missing_categories)
-            else:
-                st.info("No recommendations found.")
-
-        # ---------------- DOWNLOAD BUTTON ----------------
-        output_df = pd.DataFrame({
-            "Business Partner": [selected_partner],
-            "Industry": [selected_industry],
-            "Recommended Categories": [", ".join(missing_categories)]
-        })
-
-        st.download_button(
-            label="📥 Download Recommendation CSV",
-            data=output_df.to_csv(index=False),
-            file_name="cross_sell_recommendations.csv",
-            mime="text/csv"
-        )
-
-    except Exception as e:
-        st.error(f"Error Reading File: {e}")
+    with col4:
+        st.markdown(f"### What {branch_b} Can Learn from {branch_a}")
+        st.write("**New Industries:**", list(sets_a["Industry"] - sets_b["Industry"]))
+        st.write("**New Categories:**", list(sets_a["Category"] - sets_b["Category"]))
+        st.write("**New Brands:**", list(sets_a["Brand"] - sets_b["Brand"]))

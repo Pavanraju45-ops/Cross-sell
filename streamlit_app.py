@@ -2,21 +2,17 @@ import streamlit as st
 import pandas as pd
 
 # ---------------- PAGE CONFIG ----------------
-st.set_page_config(
-    page_title="Branch Cross-Sell Analyzer",
-    layout="wide"
-)
+st.set_page_config(page_title="Branch Cross-Sell Analyzer", layout="wide")
 
 st.title("🤝 Branch Cross-Sell Opportunity Analyzer")
 st.markdown("### Compare branch portfolios and identify cross-sell opportunities")
 
-# ---------------- FILE UPLOAD ----------------
 uploaded_file = st.file_uploader("📂 Upload Sales Data", type=["xlsx", "csv"])
 
 if uploaded_file:
 
     try:
-        # ---------------- READ FILE ----------------
+        # ---------------- LOAD FILE ----------------
         if uploaded_file.name.endswith(".csv"):
             df = pd.read_csv(uploaded_file)
         else:
@@ -25,7 +21,7 @@ if uploaded_file:
         # ---------------- CLEAN COLUMN NAMES ----------------
         df.columns = df.columns.str.strip().str.lower()
 
-        # ---------------- AUTO MAP COLUMNS ----------------
+        # ---------------- AUTO MAP ----------------
         column_mapping = {}
 
         for col in df.columns:
@@ -40,7 +36,6 @@ if uploaded_file:
 
         df = df.rename(columns=column_mapping)
 
-        # ---------------- CHECK REQUIRED COLUMNS ----------------
         required_cols = ['organization', 'industry', 'category', 'brand']
 
         missing_cols = [col for col in required_cols if col not in df.columns]
@@ -49,39 +44,47 @@ if uploaded_file:
             st.error(f"❌ Missing required columns: {missing_cols}")
             st.stop()
 
-        # ---------------- CLEAN DATA ----------------
+        # ---------------- STRONG DATA CLEANING ----------------
         df = df[required_cols]
 
-        # 🚨 CRITICAL FIX (handles float + string issue)
-        df['organization'] = df['organization'].astype(str).str.strip()
-        df['industry'] = df['industry'].astype(str).str.strip()
-        df['category'] = df['category'].astype(str).str.strip()
-        df['brand'] = df['brand'].astype(str).str.strip()
+        # Remove rows where organization is null BEFORE converting
+        df = df.dropna(subset=['organization'])
 
-        # Remove invalid rows
-        df = df[df['organization'] != 'nan']
+        # Convert to string AFTER removing nulls
+        for col in required_cols:
+            df[col] = df[col].astype(str).str.strip()
+
+        # Remove empty / invalid values
+        df = df[
+            (df['organization'] != '') &
+            (df['organization'].str.lower() != 'nan')
+        ]
 
         df = df.drop_duplicates()
 
         st.success("✅ File uploaded successfully")
 
-        # ---------------- SIDEBAR ----------------
-        st.sidebar.header("🔎 Select Branches")
+        # ---------------- SAFE BRANCH LIST ----------------
+        branches = sorted(df['organization'].unique().tolist())
 
-        branches = sorted(df['organization'].unique())
+        # Debug (temporary)
+        st.write("Available Branches:", branches)
 
         if len(branches) < 2:
-            st.error("⚠️ Need at least 2 branches to compare")
+            st.error("⚠️ Need at least 2 valid branches to compare.")
             st.stop()
+
+        # ---------------- SIDEBAR ----------------
+        st.sidebar.header("🔎 Select Branches")
 
         branch_a = st.sidebar.selectbox("🏢 Your Branch", branches)
         branch_b = st.sidebar.selectbox("🏢 Compare With", branches)
 
-        # ---------------- FILTER DATA ----------------
+        # ---------------- FILTER ----------------
         df_a = df[df['organization'] == branch_a]
         df_b = df[df['organization'] == branch_b]
 
-        # ---------------- EXTRACT DATA ----------------
+        # ---------------- EXTRACT ----------------
         def extract_sets(data):
             return {
                 "Industry": sorted(set(data['industry'])),

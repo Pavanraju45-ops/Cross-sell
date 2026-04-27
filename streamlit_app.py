@@ -1,11 +1,17 @@
 import streamlit as st
 import pandas as pd
 
-st.set_page_config(page_title="Branch Cross-Sell Analyzer", layout="wide")
+# ---------------- PAGE CONFIG ----------------
+st.set_page_config(
+    page_title="Branch Cross-Sell Analyzer",
+    layout="wide"
+)
 
 st.title("🤝 Branch Cross-Sell Opportunity Analyzer")
+st.markdown("### Compare branch portfolios and identify cross-sell opportunities")
 
-uploaded_file = st.file_uploader("Upload Sales Data", type=["xlsx", "csv"])
+# ---------------- FILE UPLOAD ----------------
+uploaded_file = st.file_uploader("📂 Upload Sales Data", type=["xlsx", "csv"])
 
 if uploaded_file:
 
@@ -19,7 +25,10 @@ if uploaded_file:
         # ---------------- CLEAN COLUMN NAMES ----------------
         df.columns = df.columns.str.strip().str.lower()
 
-        st.write("📌 Detected Columns:", df.columns.tolist())
+        # ---------------- DISPLAY CLEAN COLUMN LIST ----------------
+        with st.expander("📌 Detected Columns (Click to View)"):
+            for col in df.columns:
+                st.write(f"• {col}")
 
         # ---------------- AUTO MAP COLUMNS ----------------
         column_mapping = {}
@@ -48,73 +57,85 @@ if uploaded_file:
         # ---------------- CLEAN DATA ----------------
         df = df[required_cols].drop_duplicates()
 
-        st.success("✅ File uploaded and processed successfully")
+        st.success("✅ File uploaded successfully")
 
-        # ---------------- SIDEBAR ----------------
-        st.sidebar.header("Select Branches")
+        # ---------------- SIDEBAR FILTERS ----------------
+        st.sidebar.header("🔎 Select Branches")
 
-        branches = sorted(df['organization'].dropna().unique())
+        branches = sorted(df['organization'].dropna().astype(str).unique())
 
-        branch_a = st.sidebar.selectbox("Select Your Branch", branches)
-        branch_b = st.sidebar.selectbox("Select Other Branch", branches)
+        if len(branches) < 2:
+            st.error("⚠️ Need at least 2 branches to compare")
+            st.stop()
+
+        branch_a = st.sidebar.selectbox("🏢 Your Branch", branches)
+        branch_b = st.sidebar.selectbox("🏢 Compare With", branches)
 
         # ---------------- FILTER DATA ----------------
         df_a = df[df['organization'] == branch_a]
         df_b = df[df['organization'] == branch_b]
 
-        # ---------------- EXTRACT SETS ----------------
+        # ---------------- EXTRACT DATA ----------------
         def extract_sets(data):
             return {
-                "Industry": set(data['industry']),
-                "Category": set(data['category']),
-                "Brand": set(data['brand'])
+                "Industry": sorted(set(data['industry'])),
+                "Category": sorted(set(data['category'])),
+                "Brand": sorted(set(data['brand']))
             }
 
         sets_a = extract_sets(df_a)
         sets_b = extract_sets(df_b)
 
-        # ---------------- DISPLAY ----------------
+        # ---------------- DISPLAY BRANCH DATA ----------------
         col1, col2 = st.columns(2)
 
         with col1:
-            st.subheader(f"📍 {branch_a} Portfolio")
-            st.write("**Industries:**", list(sets_a["Industry"]))
-            st.write("**Categories:**", list(sets_a["Category"]))
-            st.write("**Brands:**", list(sets_a["Brand"]))
+            st.markdown(f"### 📍 {branch_a} Portfolio")
+            st.markdown("**Industries**")
+            st.write(", ".join(sets_a["Industry"]) if sets_a["Industry"] else "No Data")
+
+            st.markdown("**Categories**")
+            st.write(", ".join(sets_a["Category"]) if sets_a["Category"] else "No Data")
+
+            st.markdown("**Brands**")
+            st.write(", ".join(sets_a["Brand"]) if sets_a["Brand"] else "No Data")
 
         with col2:
-            st.subheader(f"📍 {branch_b} Portfolio")
-            st.write("**Industries:**", list(sets_b["Industry"]))
-            st.write("**Categories:**", list(sets_b["Category"]))
-            st.write("**Brands:**", list(sets_b["Brand"]))
+            st.markdown(f"### 📍 {branch_b} Portfolio")
+            st.markdown("**Industries**")
+            st.write(", ".join(sets_b["Industry"]) if sets_b["Industry"] else "No Data")
+
+            st.markdown("**Categories**")
+            st.write(", ".join(sets_b["Category"]) if sets_b["Category"] else "No Data")
+
+            st.markdown("**Brands**")
+            st.write(", ".join(sets_b["Brand"]) if sets_b["Brand"] else "No Data")
 
         st.divider()
 
         # ---------------- COMMON ----------------
-        st.subheader("🔗 Common Areas (Overlap)")
+        st.markdown("## 🔗 Common Areas")
 
-        st.write("**Industries:**", list(sets_a["Industry"] & sets_b["Industry"]))
-        st.write("**Categories:**", list(sets_a["Category"] & sets_b["Category"]))
-        st.write("**Brands:**", list(sets_a["Brand"] & sets_b["Brand"]))
+        col3, col4, col5 = st.columns(3)
+
+        col3.metric("Industries", len(set(sets_a["Industry"]) & set(sets_b["Industry"])))
+        col4.metric("Categories", len(set(sets_a["Category"]) & set(sets_b["Category"])))
+        col5.metric("Brands", len(set(sets_a["Brand"]) & set(sets_b["Brand"])))
 
         st.divider()
 
         # ---------------- OPPORTUNITIES ----------------
-        st.subheader("🚀 Cross-Sell Opportunities")
+        st.markdown("## 🚀 Cross-Sell Opportunities")
 
-        col3, col4 = st.columns(2)
+        col6, col7 = st.columns(2)
 
-        with col3:
-            st.markdown(f"### What {branch_a} Can Learn from {branch_b}")
-            st.write("**New Industries:**", list(sets_b["Industry"] - sets_a["Industry"]))
-            st.write("**New Categories:**", list(sets_b["Category"] - sets_a["Category"]))
-            st.write("**New Brands:**", list(sets_b["Brand"] - sets_a["Brand"]))
+        with col6:
+            st.markdown(f"### ➡️ {branch_a} Can Target")
+            st.success(", ".join(set(sets_b["Category"]) - set(sets_a["Category"])) or "No Opportunities")
 
-        with col4:
-            st.markdown(f"### What {branch_b} Can Learn from {branch_a}")
-            st.write("**New Industries:**", list(sets_a["Industry"] - sets_b["Industry"]))
-            st.write("**New Categories:**", list(sets_a["Category"] - sets_b["Category"]))
-            st.write("**New Brands:**", list(sets_a["Brand"] - sets_b["Brand"]))
+        with col7:
+            st.markdown(f"### ➡️ {branch_b} Can Target")
+            st.success(", ".join(set(sets_a["Category"]) - set(sets_b["Category"])) or "No Opportunities")
 
     except Exception as e:
         st.error(f"🚨 Error: {e}")

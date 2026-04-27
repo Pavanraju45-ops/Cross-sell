@@ -1,11 +1,13 @@
 import streamlit as st
 import pandas as pd
 
+# ---------------- PAGE CONFIG ----------------
 st.set_page_config(page_title="Branch Cross-Sell Analyzer", layout="wide")
 
 st.title("🤝 Branch Cross-Sell Opportunity Analyzer")
 st.markdown("### Compare branch portfolios and identify cross-sell opportunities")
 
+# ---------------- FILE UPLOAD ----------------
 uploaded_file = st.file_uploader("📂 Upload Sales Data", type=["xlsx", "csv"])
 
 if uploaded_file:
@@ -51,7 +53,6 @@ if uploaded_file:
         for col in required_cols:
             df[col] = df[col].astype(str).str.strip()
 
-        # Remove junk values
         for col in required_cols:
             df = df[
                 (df[col] != '') &
@@ -66,9 +67,10 @@ if uploaded_file:
         branches = sorted(df['organization'].unique().tolist())
 
         if len(branches) < 2:
-            st.error("⚠️ Need at least 2 branches")
+            st.error("⚠️ Need at least 2 branches to compare.")
             st.stop()
 
+        # -------- SIDEBAR --------
         st.sidebar.header("🔎 Select Branches")
 
         branch_a = st.sidebar.selectbox("🏢 Your Branch", branches)
@@ -77,11 +79,11 @@ if uploaded_file:
         df_a = df[df['organization'] == branch_a]
         df_b = df[df['organization'] == branch_b]
 
-        # -------- SAFE SORT FUNCTION --------
+        # -------- SAFE SORT --------
         def safe_sorted(series):
             return sorted(series.dropna().astype(str).str.strip().unique())
 
-        # -------- EXTRACT CLEAN SETS --------
+        # -------- EXTRACT --------
         def extract_sets(data):
             return {
                 "Industry": safe_sorted(data['industry']),
@@ -91,33 +93,54 @@ if uploaded_file:
 
         sets_a = extract_sets(df_a)
         sets_b = extract_sets(df_b)
-    def highlight_items(list_a, list_b):
-        highlighted = []
-        for item in list_a:
-            if item in list_b:
-             highlighted.append(f"🟢 {item}")
-        else:
-            highlighted.append(f"🔵 {item}")
-    return ", ".join(highlighted) if highlighted else "No Data"
+
+        # -------- HIGHLIGHT FUNCTION --------
+        def highlight_items(list_a, list_b):
+            highlighted = []
+            for item in list_a:
+                if item in list_b:
+                    highlighted.append(f"🟢 {item}")
+                else:
+                    highlighted.append(f"🔵 {item}")
+            return ", ".join(highlighted) if highlighted else "No Data"
 
         # -------- DISPLAY --------
         col1, col2 = st.columns(2)
 
         with col1:
             st.markdown(f"### 📍 {branch_a}")
-            st.write("**Industries:**", ", ".join(sets_a["Industry"]) or "No Data")
-            st.write("**Categories:**", ", ".join(sets_a["Category"]) or "No Data")
-            st.write("**Brands:**", ", ".join(sets_a["Brand"]) or "No Data")
+
+            st.markdown("**Industries**")
+            st.write(highlight_items(sets_a["Industry"], sets_b["Industry"]))
+
+            st.markdown("**Categories**")
+            st.write(highlight_items(sets_a["Category"], sets_b["Category"]))
+
+            st.markdown("**Brands**")
+            st.write(highlight_items(sets_a["Brand"], sets_b["Brand"]))
 
         with col2:
             st.markdown(f"### 📍 {branch_b}")
-            st.write("**Industries:**", ", ".join(sets_b["Industry"]) or "No Data")
-            st.write("**Categories:**", ", ".join(sets_b["Category"]) or "No Data")
-            st.write("**Brands:**", ", ".join(sets_b["Brand"]) or "No Data")
+
+            st.markdown("**Industries**")
+            st.write(highlight_items(sets_b["Industry"], sets_a["Industry"]))
+
+            st.markdown("**Categories**")
+            st.write(highlight_items(sets_b["Category"], sets_a["Category"]))
+
+            st.markdown("**Brands**")
+            st.write(highlight_items(sets_b["Brand"], sets_a["Brand"]))
+
+        # -------- LEGEND --------
+        st.markdown("""
+        ### 🧾 Legend
+        🟢 Common across both branches  
+        🔵 Unique to that branch  
+        """)
 
         st.divider()
 
-        # -------- COMMON --------
+        # -------- COMMON AREAS --------
         st.markdown("## 🔗 Common Areas")
 
         st.write("**Industries:**", ", ".join(set(sets_a["Industry"]) & set(sets_b["Industry"])) or "None")

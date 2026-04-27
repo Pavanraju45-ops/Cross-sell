@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 
-# ---------------- PAGE CONFIG ----------------
 st.set_page_config(page_title="Branch Cross-Sell Analyzer", layout="wide")
 
 st.title("🤝 Branch Cross-Sell Opportunity Analyzer")
@@ -12,16 +11,16 @@ uploaded_file = st.file_uploader("📂 Upload Sales Data", type=["xlsx", "csv"])
 if uploaded_file:
 
     try:
-        # ---------------- LOAD FILE ----------------
+        # -------- LOAD FILE --------
         if uploaded_file.name.endswith(".csv"):
             df = pd.read_csv(uploaded_file)
         else:
             df = pd.read_excel(uploaded_file, engine="openpyxl")
 
-        # ---------------- CLEAN COLUMN NAMES ----------------
+        # -------- CLEAN COLUMN NAMES --------
         df.columns = df.columns.str.strip().str.lower()
 
-        # ---------------- AUTO MAP ----------------
+        # -------- AUTO MAP --------
         column_mapping = {}
 
         for col in df.columns:
@@ -41,98 +40,94 @@ if uploaded_file:
         missing_cols = [col for col in required_cols if col not in df.columns]
 
         if missing_cols:
-            st.error(f"❌ Missing required columns: {missing_cols}")
+            st.error(f"❌ Missing columns: {missing_cols}")
             st.stop()
 
-        # ---------------- STRONG DATA CLEANING ----------------
         df = df[required_cols]
 
-        # Remove rows where organization is null BEFORE converting
+        # -------- STRONG CLEANING --------
         df = df.dropna(subset=['organization'])
 
-        # Convert to string AFTER removing nulls
         for col in required_cols:
             df[col] = df[col].astype(str).str.strip()
 
-        # Remove empty / invalid values
-        df = df[
-            (df['organization'] != '') &
-            (df['organization'].str.lower() != 'nan')
-        ]
+        # Remove junk values
+        for col in required_cols:
+            df = df[
+                (df[col] != '') &
+                (df[col].str.lower() != 'nan')
+            ]
 
         df = df.drop_duplicates()
 
         st.success("✅ File uploaded successfully")
 
-        # ---------------- SAFE BRANCH LIST ----------------
+        # -------- BRANCH LIST --------
         branches = sorted(df['organization'].unique().tolist())
 
-        # Debug (temporary)
-        st.write("Available Branches:", branches)
-
         if len(branches) < 2:
-            st.error("⚠️ Need at least 2 valid branches to compare.")
+            st.error("⚠️ Need at least 2 branches")
             st.stop()
 
-        # ---------------- SIDEBAR ----------------
         st.sidebar.header("🔎 Select Branches")
 
         branch_a = st.sidebar.selectbox("🏢 Your Branch", branches)
         branch_b = st.sidebar.selectbox("🏢 Compare With", branches)
 
-        # ---------------- FILTER ----------------
         df_a = df[df['organization'] == branch_a]
         df_b = df[df['organization'] == branch_b]
 
-        # ---------------- EXTRACT ----------------
+        # -------- SAFE SORT FUNCTION --------
+        def safe_sorted(series):
+            return sorted(series.dropna().astype(str).str.strip().unique())
+
+        # -------- EXTRACT CLEAN SETS --------
         def extract_sets(data):
             return {
-                "Industry": sorted(set(data['industry'])),
-                "Category": sorted(set(data['category'])),
-                "Brand": sorted(set(data['brand']))
+                "Industry": safe_sorted(data['industry']),
+                "Category": safe_sorted(data['category']),
+                "Brand": safe_sorted(data['brand'])
             }
 
         sets_a = extract_sets(df_a)
         sets_b = extract_sets(df_b)
 
-        # ---------------- DISPLAY ----------------
+        # -------- DISPLAY --------
         col1, col2 = st.columns(2)
 
         with col1:
-            st.markdown(f"### 📍 {branch_a} Portfolio")
+            st.markdown(f"### 📍 {branch_a}")
             st.write("**Industries:**", ", ".join(sets_a["Industry"]) or "No Data")
             st.write("**Categories:**", ", ".join(sets_a["Category"]) or "No Data")
             st.write("**Brands:**", ", ".join(sets_a["Brand"]) or "No Data")
 
         with col2:
-            st.markdown(f"### 📍 {branch_b} Portfolio")
+            st.markdown(f"### 📍 {branch_b}")
             st.write("**Industries:**", ", ".join(sets_b["Industry"]) or "No Data")
             st.write("**Categories:**", ", ".join(sets_b["Category"]) or "No Data")
             st.write("**Brands:**", ", ".join(sets_b["Brand"]) or "No Data")
 
         st.divider()
 
-        # ---------------- COMMON ----------------
+        # -------- COMMON --------
         st.markdown("## 🔗 Common Areas")
 
-        col3, col4, col5 = st.columns(3)
-
-        col3.metric("Industries", len(set(sets_a["Industry"]) & set(sets_b["Industry"])))
-        col4.metric("Categories", len(set(sets_a["Category"]) & set(sets_b["Category"])))
-        col5.metric("Brands", len(set(sets_a["Brand"]) & set(sets_b["Brand"])))
+        st.write("**Industries:**", ", ".join(set(sets_a["Industry"]) & set(sets_b["Industry"])) or "None")
+        st.write("**Categories:**", ", ".join(set(sets_a["Category"]) & set(sets_b["Category"])) or "None")
+        st.write("**Brands:**", ", ".join(set(sets_a["Brand"]) & set(sets_b["Brand"])) or "None")
 
         st.divider()
 
-        # ---------------- OPPORTUNITIES ----------------
+        # -------- OPPORTUNITIES --------
         st.markdown("## 🚀 Cross-Sell Opportunities")
 
-        col6, col7 = st.columns(2)
+        col3, col4 = st.columns(2)
 
-        with col6:
+        with col3:
             st.markdown(f"### ➡️ {branch_a} Can Target")
             st.success(", ".join(set(sets_b["Category"]) - set(sets_a["Category"])) or "No Opportunities")
 
-        with col7:
+        with col4:
             st.markdown(f"### ➡️ {branch_b} Can Target")
             st.success(", ".join(set(sets_a["Category"]) - set(sets_b["Category"])) or "No Opportunities")
 

@@ -25,11 +25,6 @@ if uploaded_file:
         # ---------------- CLEAN COLUMN NAMES ----------------
         df.columns = df.columns.str.strip().str.lower()
 
-        # ---------------- DISPLAY CLEAN COLUMN LIST ----------------
-        with st.expander("📌 Detected Columns (Click to View)"):
-            for col in df.columns:
-                st.write(f"• {col}")
-
         # ---------------- AUTO MAP COLUMNS ----------------
         column_mapping = {}
 
@@ -55,14 +50,25 @@ if uploaded_file:
             st.stop()
 
         # ---------------- CLEAN DATA ----------------
-        df = df[required_cols].drop_duplicates()
+        df = df[required_cols]
+
+        # 🚨 CRITICAL FIX (handles float + string issue)
+        df['organization'] = df['organization'].astype(str).str.strip()
+        df['industry'] = df['industry'].astype(str).str.strip()
+        df['category'] = df['category'].astype(str).str.strip()
+        df['brand'] = df['brand'].astype(str).str.strip()
+
+        # Remove invalid rows
+        df = df[df['organization'] != 'nan']
+
+        df = df.drop_duplicates()
 
         st.success("✅ File uploaded successfully")
 
-        # ---------------- SIDEBAR FILTERS ----------------
+        # ---------------- SIDEBAR ----------------
         st.sidebar.header("🔎 Select Branches")
 
-        branches = sorted(df['organization'].dropna().astype(str).unique())
+        branches = sorted(df['organization'].unique())
 
         if len(branches) < 2:
             st.error("⚠️ Need at least 2 branches to compare")
@@ -86,30 +92,20 @@ if uploaded_file:
         sets_a = extract_sets(df_a)
         sets_b = extract_sets(df_b)
 
-        # ---------------- DISPLAY BRANCH DATA ----------------
+        # ---------------- DISPLAY ----------------
         col1, col2 = st.columns(2)
 
         with col1:
             st.markdown(f"### 📍 {branch_a} Portfolio")
-            st.markdown("**Industries**")
-            st.write(", ".join(sets_a["Industry"]) if sets_a["Industry"] else "No Data")
-
-            st.markdown("**Categories**")
-            st.write(", ".join(sets_a["Category"]) if sets_a["Category"] else "No Data")
-
-            st.markdown("**Brands**")
-            st.write(", ".join(sets_a["Brand"]) if sets_a["Brand"] else "No Data")
+            st.write("**Industries:**", ", ".join(sets_a["Industry"]) or "No Data")
+            st.write("**Categories:**", ", ".join(sets_a["Category"]) or "No Data")
+            st.write("**Brands:**", ", ".join(sets_a["Brand"]) or "No Data")
 
         with col2:
             st.markdown(f"### 📍 {branch_b} Portfolio")
-            st.markdown("**Industries**")
-            st.write(", ".join(sets_b["Industry"]) if sets_b["Industry"] else "No Data")
-
-            st.markdown("**Categories**")
-            st.write(", ".join(sets_b["Category"]) if sets_b["Category"] else "No Data")
-
-            st.markdown("**Brands**")
-            st.write(", ".join(sets_b["Brand"]) if sets_b["Brand"] else "No Data")
+            st.write("**Industries:**", ", ".join(sets_b["Industry"]) or "No Data")
+            st.write("**Categories:**", ", ".join(sets_b["Category"]) or "No Data")
+            st.write("**Brands:**", ", ".join(sets_b["Brand"]) or "No Data")
 
         st.divider()
 

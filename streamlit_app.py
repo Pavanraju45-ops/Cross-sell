@@ -91,6 +91,14 @@ if uploaded_file:
 
         sets_a = extract_sets(df_a)
         sets_b = extract_sets(df_b)
+    def highlight_items(list_a, list_b):
+        highlighted = []
+        for item in list_a:
+            if item in list_b:
+             highlighted.append(f"🟢 {item}")
+        else:
+            highlighted.append(f"🔵 {item}")
+    return ", ".join(highlighted) if highlighted else "No Data"
 
         # -------- DISPLAY --------
         col1, col2 = st.columns(2)

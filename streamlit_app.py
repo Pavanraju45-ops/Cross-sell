@@ -37,15 +37,14 @@ if uploaded_file:
         df = df.rename(columns=column_mapping)
 
         required_cols = ['organization', 'industry', 'category', 'brand']
-        missing_cols = [col for col in required_cols if col not in df.columns]
 
-        if missing_cols:
-            st.error(f"❌ Missing columns: {missing_cols}")
+        if not all(col in df.columns for col in required_cols):
+            st.error("❌ Required columns missing")
             st.stop()
 
         df = df[required_cols]
 
-        # -------- DATA CLEANING --------
+        # -------- CLEAN DATA --------
         df = df.dropna(subset=['organization'])
 
         for col in required_cols:
@@ -59,124 +58,102 @@ if uploaded_file:
         st.success("✅ File uploaded successfully")
 
         # -------- BRANCH LIST --------
-        branches = sorted(df['organization'].unique().tolist())
+        branches = sorted(df['organization'].unique())
 
-        if len(branches) < 1:
-            st.error("⚠️ No valid branches found.")
-            st.stop()
-
-        # -------- SIDEBAR --------
         st.sidebar.header("🔎 Select Branch")
         selected_branch = st.sidebar.selectbox("🏢 Choose Branch", branches)
 
-        # -------- DATA SPLIT --------
         df_all = df
         df_branch = df[df['organization'] == selected_branch]
 
-        # -------- SAFE SORT --------
-        def safe_sorted(series):
-            return sorted(series.dropna().astype(str).str.strip().unique())
-
-        # -------- EXTRACT SETS --------
-        def extract_sets(data):
+        # -------- HELPER --------
+        def get_sets(data):
             return {
-                "Industry": safe_sorted(data['industry']),
-                "Category": safe_sorted(data['category']),
-                "Brand": safe_sorted(data['brand'])
+                "Industry": sorted(data['industry'].unique()),
+                "Category": sorted(data['category'].unique()),
+                "Brand": sorted(data['brand'].unique())
             }
 
-        sets_all = extract_sets(df_all)
-        sets_branch = extract_sets(df_branch)
+        sets_all = get_sets(df_all)
+        sets_branch = get_sets(df_branch)
 
-        # -------- HIGHLIGHT FUNCTION --------
-        def highlight_items(list_a, list_b):
-            result = []
-            for item in list_a:
-                if item in list_b:
-                    result.append(f"🟢 {item}")
-                else:
-                    result.append(f"🔴 {item}")
-            return ", ".join(result) if result else "No Data"
+        # -------- TABLE FUNCTION --------
+        def create_comparison_table(all_list, branch_list):
+            covered = sorted(set(all_list) & set(branch_list))
+            missing = sorted(set(all_list) - set(branch_list))
 
-        # -------- DISPLAY TOP SECTION --------
-        col1, col2 = st.columns(2)
+            max_len = max(len(covered), len(missing))
+
+            covered += [""] * (max_len - len(covered))
+            missing += [""] * (max_len - len(missing))
+
+            return pd.DataFrame({
+                "🟢 Covered": covered,
+                "🔴 Missing": missing
+            })
+
+        # -------- MAIN COMPARISON --------
+        st.markdown("## 📊 Branch vs All India Comparison")
+
+        col1, col2, col3 = st.columns(3)
 
         with col1:
-            st.markdown("### 🇮🇳 All India")
-
-            st.markdown("**Industries**")
-            st.write(", ".join(sets_all["Industry"]))
-
-            st.markdown("**Categories**")
-            st.write(", ".join(sets_all["Category"]))
-
-            st.markdown("**Brands**")
-            st.write(", ".join(sets_all["Brand"]))
+            st.markdown("### 🏭 Industries")
+            st.dataframe(create_comparison_table(sets_all["Industry"], sets_branch["Industry"]))
 
         with col2:
-            st.markdown(f"### 📍 {selected_branch}")
+            st.markdown("### 📦 Categories")
+            st.dataframe(create_comparison_table(sets_all["Category"], sets_branch["Category"]))
 
-            st.markdown("**Industries**")
-            st.write(highlight_items(sets_all["Industry"], sets_branch["Industry"]))
-
-            st.markdown("**Categories**")
-            st.write(highlight_items(sets_all["Category"], sets_branch["Category"]))
-
-            st.markdown("**Brands**")
-            st.write(highlight_items(sets_all["Brand"], sets_branch["Brand"]))
-
-        # -------- LEGEND --------
-        st.markdown("""
-        ### 🧾 Legend
-        🟢 Covered by branch  
-        🔴 Missing / Opportunity  
-        """)
+        with col3:
+            st.markdown("### 🏷️ Brands")
+            st.dataframe(create_comparison_table(sets_all["Brand"], sets_branch["Brand"]))
 
         st.divider()
 
-        # -------- MISSING CALCULATIONS --------
+        # -------- MISSING DATA --------
         missing_industries = sorted(set(sets_all["Industry"]) - set(sets_branch["Industry"]))
         missing_categories = sorted(set(sets_all["Category"]) - set(sets_branch["Category"]))
         missing_brands = sorted(set(sets_all["Brand"]) - set(sets_branch["Brand"]))
 
-        def format_list(items):
-            return ", ".join([f"🔴 {i}" for i in items]) if items else "No Gaps"
+        # -------- MISSING TABLE --------
+        def create_simple_table(items):
+            return pd.DataFrame({"Missing Items": items}) if items else pd.DataFrame({"Missing Items": ["No Gaps"]})
 
-        # -------- MISSING OPPORTUNITIES --------
-        st.markdown("## 🚀 Missing Opportunities (Branch vs All India)")
+        st.markdown("## 🚀 Missing Opportunities")
 
-        col3, col4, col5 = st.columns(3)
-
-        with col3:
-            st.markdown("### 🏭 Industries")
-            st.write(format_list(missing_industries))
+        col4, col5, col6 = st.columns(3)
 
         with col4:
-            st.markdown("### 📦 Categories")
-            st.write(format_list(missing_categories))
+            st.markdown("### 🏭 Industries")
+            st.dataframe(create_simple_table(missing_industries))
 
         with col5:
+            st.markdown("### 📦 Categories")
+            st.dataframe(create_simple_table(missing_categories))
+
+        with col6:
             st.markdown("### 🏷️ Brands")
-            st.write(format_list(missing_brands))
+            st.dataframe(create_simple_table(missing_brands))
 
         st.divider()
 
-        # -------- CROSS SELL --------
+        # -------- CROSS SELL TABLE --------
         st.markdown("## 🎯 Key Cross-Sell Opportunities")
 
-        col6, col7, col8 = st.columns(3)
-
-        with col6:
-            st.markdown("### 🏭 Industries")
-            st.write(format_list(missing_industries))
+        col7, col8, col9 = st.columns(3)
 
         with col7:
-            st.markdown("### 📦 Categories")
-            st.write(format_list(missing_categories))
+            st.markdown("### 🏭 Industries")
+            st.dataframe(create_simple_table(missing_industries))
 
         with col8:
+            st.markdown("### 📦 Categories")
+            st.dataframe(create_simple_table(missing_categories))
+
+        with col9:
             st.markdown("### 🏷️ Brands")
-            st.write(format_list(missing_brands))
+            st.dataframe(create_simple_table(missing_brands))
 
     except Exception as e:
         st.error(f"🚨 Error: {e}")

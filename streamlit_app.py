@@ -4,8 +4,8 @@ import pandas as pd
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(page_title="Branch Cross-Sell Analyzer", layout="wide")
 
-st.title("🤝 Branch Cross-Sell Opportunity Analyzer")
-st.markdown("### Compare branch portfolios and identify cross-sell opportunities")
+st.title("🇮🇳 All India vs Branch Analyzer")
+st.markdown("### Compare branch performance with All India benchmark")
 
 # ---------------- FILE UPLOAD ----------------
 uploaded_file = st.file_uploader("📂 Upload Sales Data", type=["xlsx", "csv"])
@@ -47,17 +47,14 @@ if uploaded_file:
 
         df = df[required_cols]
 
-        # -------- STRONG CLEANING --------
+        # -------- CLEAN DATA --------
         df = df.dropna(subset=['organization'])
 
         for col in required_cols:
             df[col] = df[col].astype(str).str.strip()
 
         for col in required_cols:
-            df = df[
-                (df[col] != '') &
-                (df[col].str.lower() != 'nan')
-            ]
+            df = df[(df[col] != '') & (df[col].str.lower() != 'nan')]
 
         df = df.drop_duplicates()
 
@@ -66,18 +63,26 @@ if uploaded_file:
         # -------- BRANCH LIST --------
         branches = sorted(df['organization'].unique().tolist())
 
-        if len(branches) < 2:
-            st.error("⚠️ Need at least 2 branches to compare.")
+        if len(branches) < 1:
+            st.error("⚠️ No valid branches found.")
             st.stop()
 
+        # Add All India option
+        branch_options = ["All India"] + branches
+
         # -------- SIDEBAR --------
-        st.sidebar.header("🔎 Select Branches")
+        st.sidebar.header("🔎 Select Comparison")
 
-        branch_a = st.sidebar.selectbox("🏢 Your Branch", branches)
-        branch_b = st.sidebar.selectbox("🏢 Compare With", branches)
+        selected_branch = st.sidebar.selectbox("🏢 Select Branch", branch_options, index=1)
 
-        df_a = df[df['organization'] == branch_a]
-        df_b = df[df['organization'] == branch_b]
+        # -------- DATA SELECTION --------
+        df_all_india = df
+
+        if selected_branch == "All India":
+            st.warning("⚠️ Please select a specific branch for comparison")
+            st.stop()
+
+        df_branch = df[df['organization'] == selected_branch]
 
         # -------- SAFE SORT --------
         def safe_sorted(series):
@@ -91,76 +96,72 @@ if uploaded_file:
                 "Brand": safe_sorted(data['brand'])
             }
 
-        sets_a = extract_sets(df_a)
-        sets_b = extract_sets(df_b)
+        sets_all = extract_sets(df_all_india)
+        sets_branch = extract_sets(df_branch)
 
-        # -------- HIGHLIGHT FUNCTION --------
+        # -------- HIGHLIGHT --------
         def highlight_items(list_a, list_b):
             highlighted = []
             for item in list_a:
                 if item in list_b:
                     highlighted.append(f"🟢 {item}")
                 else:
-                    highlighted.append(f"🔵 {item}")
+                    highlighted.append(f"🔴 {item}")
             return ", ".join(highlighted) if highlighted else "No Data"
 
         # -------- DISPLAY --------
         col1, col2 = st.columns(2)
 
         with col1:
-            st.markdown(f"### 📍 {branch_a}")
+            st.markdown("### 🇮🇳 All India")
 
             st.markdown("**Industries**")
-            st.write(highlight_items(sets_a["Industry"], sets_b["Industry"]))
+            st.write(", ".join(sets_all["Industry"]))
 
             st.markdown("**Categories**")
-            st.write(highlight_items(sets_a["Category"], sets_b["Category"]))
+            st.write(", ".join(sets_all["Category"]))
 
             st.markdown("**Brands**")
-            st.write(highlight_items(sets_a["Brand"], sets_b["Brand"]))
+            st.write(", ".join(sets_all["Brand"]))
 
         with col2:
-            st.markdown(f"### 📍 {branch_b}")
+            st.markdown(f"### 📍 {selected_branch}")
 
             st.markdown("**Industries**")
-            st.write(highlight_items(sets_b["Industry"], sets_a["Industry"]))
+            st.write(highlight_items(sets_branch["Industry"], sets_all["Industry"]))
 
             st.markdown("**Categories**")
-            st.write(highlight_items(sets_b["Category"], sets_a["Category"]))
+            st.write(highlight_items(sets_branch["Category"], sets_all["Category"]))
 
             st.markdown("**Brands**")
-            st.write(highlight_items(sets_b["Brand"], sets_a["Brand"]))
+            st.write(highlight_items(sets_branch["Brand"], sets_all["Brand"]))
 
         # -------- LEGEND --------
         st.markdown("""
         ### 🧾 Legend
-        🟢 Common across both branches  
-        🔵 Unique to that branch  
+        🟢 Covered by branch  
+        🔴 Missing vs All India (Opportunity)  
         """)
 
         st.divider()
 
-        # -------- COMMON AREAS --------
-        st.markdown("## 🔗 Common Areas")
+        # -------- GAP ANALYSIS --------
+        st.markdown("## 🚀 Missing Opportunities (Branch vs All India)")
 
-        st.write("**Industries:**", ", ".join(set(sets_a["Industry"]) & set(sets_b["Industry"])) or "None")
-        st.write("**Categories:**", ", ".join(set(sets_a["Category"]) & set(sets_b["Category"])) or "None")
-        st.write("**Brands:**", ", ".join(set(sets_a["Brand"]) & set(sets_b["Brand"])) or "None")
+        col3, col4, col5 = st.columns(3)
+
+        col3.metric("Missing Industries", len(set(sets_all["Industry"]) - set(sets_branch["Industry"])))
+        col4.metric("Missing Categories", len(set(sets_all["Category"]) - set(sets_branch["Category"])))
+        col5.metric("Missing Brands", len(set(sets_all["Brand"]) - set(sets_branch["Brand"])))
 
         st.divider()
 
         # -------- OPPORTUNITIES --------
-        st.markdown("## 🚀 Cross-Sell Opportunities")
+        st.markdown("## 🎯 Key Cross-Sell Opportunities")
 
-        col3, col4 = st.columns(2)
-
-        with col3:
-            st.markdown(f"### ➡️ {branch_a} Can Target")
-            st.success(", ".join(set(sets_b["Category"]) - set(sets_a["Category"])) or "No Opportunities")
-
-        with col4:
-            st.markdown(f"### ➡️ {branch_b} Can Target")
-            st.success(", ".join(set(sets_a["Category"]) - set(sets_b["Category"])) or "No Opportunities")
+        st.success(
+            ", ".join(set(sets_all["Category"]) - set(sets_branch["Category"])) or "No Opportunities"
+        )
 
     except Exception as e:
         st.error(f"🚨 Error: {e}")

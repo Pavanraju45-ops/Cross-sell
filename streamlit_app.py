@@ -44,40 +44,59 @@ if uploaded_file:
 
         df = df[required_cols]
 
-        # -------- CLEAN DATA --------
+        # ---------------- STRONG CLEANING (CRITICAL FIX) ----------------
         df = df.dropna(subset=['organization'])
 
         for col in required_cols:
             df[col] = df[col].astype(str).str.strip()
 
         for col in required_cols:
-            df = df[(df[col] != '') & (df[col].str.lower() != 'nan')]
+            df = df[
+                (df[col] != '') &
+                (df[col].str.lower() != 'nan')
+            ]
 
         df = df.drop_duplicates()
 
         st.success("✅ File uploaded successfully")
 
-        # -------- BRANCH LIST --------
-        branches = sorted(df['organization'].unique())
+        # ---------------- SAFE SORT FUNCTION ----------------
+        def safe_list(series):
+            return sorted(
+                series.dropna()
+                .astype(str)
+                .str.strip()
+                .loc[lambda x: x != '']
+                .unique()
+                .tolist()
+            )
 
+        # ---------------- BRANCH LIST ----------------
+        branches = safe_list(df['organization'])
+
+        if len(branches) < 1:
+            st.error("⚠️ No valid branches found")
+            st.stop()
+
+        # ---------------- SIDEBAR ----------------
         st.sidebar.header("🔎 Select Branch")
         selected_branch = st.sidebar.selectbox("🏢 Choose Branch", branches)
 
         df_all = df
         df_branch = df[df['organization'] == selected_branch]
 
-        # -------- HELPER --------
+        # ---------------- SET EXTRACTION ----------------
         def get_sets(data):
             return {
-                "Industry": sorted(data['industry'].unique()),
-                "Category": sorted(data['category'].unique()),
-                "Brand": sorted(data['brand'].unique())
+                "Industry": safe_list(data['industry']),
+                "Category": safe_list(data['category']),
+                "Brand": safe_list(data['brand'])
             }
 
         sets_all = get_sets(df_all)
         sets_branch = get_sets(df_branch)
 
-        # -------- TABLE FUNCTION --------
+        # ---------------- TABLE CREATION ----------------
         def create_comparison_table(all_list, branch_list):
             covered = sorted(set(all_list) & set(branch_list))
             missing = sorted(set(all_list) - set(branch_list))
@@ -92,7 +111,10 @@ if uploaded_file:
                 "🔴 Missing": missing
             })
 
-        # -------- MAIN COMPARISON --------
+        def simple_table(items):
+            return pd.DataFrame({"Items": items}) if items else pd.DataFrame({"Items": ["No Gaps"]})
+
+        # ---------------- MAIN COMPARISON ----------------
         st.markdown("## 📊 Branch vs All India Comparison")
 
         col1, col2, col3 = st.columns(3)
@@ -111,14 +133,10 @@ if uploaded_file:
 
         st.divider()
 
-        # -------- MISSING DATA --------
+        # ---------------- MISSING ----------------
         missing_industries = sorted(set(sets_all["Industry"]) - set(sets_branch["Industry"]))
         missing_categories = sorted(set(sets_all["Category"]) - set(sets_branch["Category"]))
         missing_brands = sorted(set(sets_all["Brand"]) - set(sets_branch["Brand"]))
-
-        # -------- MISSING TABLE --------
-        def create_simple_table(items):
-            return pd.DataFrame({"Missing Items": items}) if items else pd.DataFrame({"Missing Items": ["No Gaps"]})
 
         st.markdown("## 🚀 Missing Opportunities")
 
@@ -126,34 +144,34 @@ if uploaded_file:
 
         with col4:
             st.markdown("### 🏭 Industries")
-            st.dataframe(create_simple_table(missing_industries))
+            st.dataframe(simple_table(missing_industries))
 
         with col5:
             st.markdown("### 📦 Categories")
-            st.dataframe(create_simple_table(missing_categories))
+            st.dataframe(simple_table(missing_categories))
 
         with col6:
             st.markdown("### 🏷️ Brands")
-            st.dataframe(create_simple_table(missing_brands))
+            st.dataframe(simple_table(missing_brands))
 
         st.divider()
 
-        # -------- CROSS SELL TABLE --------
+        # ---------------- CROSS SELL ----------------
         st.markdown("## 🎯 Key Cross-Sell Opportunities")
 
         col7, col8, col9 = st.columns(3)
 
         with col7:
             st.markdown("### 🏭 Industries")
-            st.dataframe(create_simple_table(missing_industries))
+            st.dataframe(simple_table(missing_industries))
 
         with col8:
             st.markdown("### 📦 Categories")
-            st.dataframe(create_simple_table(missing_categories))
+            st.dataframe(simple_table(missing_categories))
 
         with col9:
             st.markdown("### 🏷️ Brands")
-            st.dataframe(create_simple_table(missing_brands))
+            st.dataframe(simple_table(missing_brands))
 
     except Exception as e:
         st.error(f"🚨 Error: {e}")
